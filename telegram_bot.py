@@ -1,5 +1,4 @@
 import requests
-import schedule
 import time
 from datetime import datetime, timedelta
 from openpyxl import load_workbook
@@ -9,8 +8,9 @@ from openpyxl import load_workbook
 # ─────────────────────────────────────────────
 TELEGRAM_TOKEN = "8430077568:AAEE2LBikDWtrx8j1iZvgIckXNlJl3xnGmA"
 GROUP_CHAT_ID  = "-5118811032"
-EXCEL_FILE     = "roster.xlsx"   # your Excel file in the same folder
-SEND_TIME      = "19:25"         # 9 PM every night
+EXCEL_FILE     = "roster.xlsx"
+SEND_HOUR      = 19   # 9 PM — change this number only
+SEND_MINUTE    = 35
 
 # ─────────────────────────────────────────────
 #  STEP 1 — Parse roster from Excel
@@ -115,59 +115,71 @@ def build_message(roster, target_date):
 
 
 # ─────────────────────────────────────────────
-#  STEP 3 — Send to Telegram group
+#  STEP 3 — Send to Telegram
 # ─────────────────────────────────────────────
 def send_to_telegram(message):
+    print(f"📤 Sending message to Telegram...")
     url     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": GROUP_CHAT_ID,
         "text":    message
     }
-    response = requests.post(url, json=payload)
-    result   = response.json()
-
-    if result.get("ok"):
-        print(f"✅ Sent successfully at {datetime.now().strftime('%H:%M:%S')}")
-    else:
-        print(f"❌ Failed: {result}")
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        print(f"📡 Response status: {response.status_code}")
+        print(f"📡 Response body: {response.text}")
+        result = response.json()
+        if result.get("ok"):
+            print(f"✅ Sent successfully!")
+        else:
+            print(f"❌ Failed: {result}")
+    except Exception as e:
+        print(f"❌ Exception while sending: {e}")
 
 
 # ─────────────────────────────────────────────
-#  STEP 4 — Daily scheduled job
+#  STEP 4 — Daily job
 # ─────────────────────────────────────────────
 def daily_job():
-    print(f"⏰ Running at {datetime.now().strftime('%H:%M:%S')}")
+    print(f"\n⏰ Triggered at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    print(f"📅 Building schedule for: {tomorrow.strftime('%A, %d %B')}")
     try:
         roster  = parse_roster(EXCEL_FILE)
+        print(f"✅ Roster parsed, {len(roster)} days found")
         message = build_message(roster, tomorrow)
-        print("📋 Preview:\n", message)
+        print(f"📋 Message built:\n{message}\n")
         send_to_telegram(message)
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error in daily_job: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # ─────────────────────────────────────────────
-#  STEP 5 — Test immediately
-# ─────────────────────────────────────────────
-def test_now():
-    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    roster   = parse_roster(EXCEL_FILE)
-    message  = build_message(roster, tomorrow)
-    print("📋 Message preview:\n")
-    print(message)
-    print("\n--- Sending to Telegram now ---")
-    send_to_telegram(message)
-
-
-# ─────────────────────────────────────────────
-#  MAIN
+#  MAIN — simple loop, no schedule library
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    print(f"🤖 Telegram Duty Bot started. Sending daily at {SEND_TIME}.")
-    print("   To test immediately, run:")
-    print("   python3 -c 'from telegram_bot import test_now; test_now()'\n")
-    schedule.every().day.at(SEND_TIME).do(daily_job)
+    print(f"🤖 Telegram Duty Bot started at {datetime.now().strftime('%H:%M:%S')}")
+    print(f"📅 Will send daily at {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n")
+
+    sent_today = False
+
     while True:
-        schedule.run_pending()
-        time.sleep(30)
+        now = datetime.now()
+
+        # Reset sent flag at midnight
+        if now.hour == 0 and now.minute == 0:
+            sent_today = False
+
+        # Check if it's time to send
+        if now.hour == SEND_HOUR and now.minute == SEND_MINUTE and not sent_today:
+            print(f"🔔 It's {SEND_HOUR:02d}:{SEND_MINUTE:02d} — running daily job!")
+            daily_job()
+            sent_today = True
+
+        # Log every minute so we know bot is alive
+        if now.second < 10:
+            print(f"💓 Bot alive — {now.strftime('%H:%M')} (waiting for {SEND_HOUR:02d}:{SEND_MINUTE:02d})")
+
+        time.sleep(10)
