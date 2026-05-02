@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 TELEGRAM_TOKEN = "8430077568:AAEE2LBikDWtrx8j1iZvgIckXNlJl3xnGmA"
 GROUP_CHAT_ID  = "-5118811032"
 EXCEL_FILE     = "roster.xlsx"   # your Excel file in the same folder
-SEND_TIME      = "19:18"         # 9 PM every night
+SEND_TIME      = "19:25"         # 9 PM every night
 
 # ─────────────────────────────────────────────
 #  STEP 1 — Parse roster from Excel
