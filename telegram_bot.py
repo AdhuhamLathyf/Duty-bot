@@ -9,8 +9,8 @@ from openpyxl import load_workbook
 TELEGRAM_TOKEN = "8430077568:AAEE2LBikDWtrx8j1iZvgIckXNlJl3xnGmA"
 GROUP_CHAT_ID  = "-5118811032"
 EXCEL_FILE     = "roster.xlsx"
-SEND_HOUR      = 19   # 9 PM — change this number only
-SEND_MINUTE    = 35
+SEND_HOUR      = 16   # 9 PM Maldives = 4 PM UTC
+SEND_MINUTE    = 0
 
 # ─────────────────────────────────────────────
 #  STEP 1 — Parse roster from Excel
@@ -118,68 +118,67 @@ def build_message(roster, target_date):
 #  STEP 3 — Send to Telegram
 # ─────────────────────────────────────────────
 def send_to_telegram(message):
-    print(f"📤 Sending message to Telegram...")
+    print(f"📤 Sending to Telegram...")
     url     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": GROUP_CHAT_ID,
-        "text":    message
-    }
+    payload = {"chat_id": GROUP_CHAT_ID, "text": message}
     try:
         response = requests.post(url, json=payload, timeout=10)
-        print(f"📡 Response status: {response.status_code}")
-        print(f"📡 Response body: {response.text}")
+        print(f"📡 Status: {response.status_code} | Body: {response.text}")
         result = response.json()
         if result.get("ok"):
             print(f"✅ Sent successfully!")
         else:
             print(f"❌ Failed: {result}")
     except Exception as e:
-        print(f"❌ Exception while sending: {e}")
+        print(f"❌ Exception: {e}")
 
 
 # ─────────────────────────────────────────────
 #  STEP 4 — Daily job
 # ─────────────────────────────────────────────
 def daily_job():
-    print(f"\n⏰ Triggered at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    print(f"📅 Building schedule for: {tomorrow.strftime('%A, %d %B')}")
+    now      = datetime.utcnow()
+    tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+    print(f"\n⏰ Triggered! UTC now: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📅 Looking for date: {tomorrow.strftime('%Y-%m-%d')}")
+
     try:
-        roster  = parse_roster(EXCEL_FILE)
-        print(f"✅ Roster parsed, {len(roster)} days found")
+        roster = parse_roster(EXCEL_FILE)
+        dates  = sorted(roster.keys())
+        print(f"✅ Roster loaded: {len(dates)} days ({dates[0].date()} to {dates[-1].date()})")
+        print(f"🔍 Is {tomorrow.date()} in roster? {tomorrow in roster}")
+
         message = build_message(roster, tomorrow)
-        print(f"📋 Message built:\n{message}\n")
+        print(f"📋 Message:\n{message}\n")
         send_to_telegram(message)
     except Exception as e:
-        print(f"❌ Error in daily_job: {e}")
+        print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
 
 
 # ─────────────────────────────────────────────
-#  MAIN — simple loop, no schedule library
+#  MAIN
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    print(f"🤖 Telegram Duty Bot started at {datetime.now().strftime('%H:%M:%S')}")
-    print(f"📅 Will send daily at {SEND_HOUR:02d}:{SEND_MINUTE:02d}\n")
+    print(f"🤖 Bot started (UTC): {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📅 Will send at {SEND_HOUR:02d}:{SEND_MINUTE:02d} UTC (9 PM Maldives)\n")
 
     sent_today = False
 
     while True:
-        now = datetime.now()
+        now = datetime.utcnow()
 
-        # Reset sent flag at midnight
         if now.hour == 0 and now.minute == 0:
             sent_today = False
 
-        # Check if it's time to send
         if now.hour == SEND_HOUR and now.minute == SEND_MINUTE and not sent_today:
-            print(f"🔔 It's {SEND_HOUR:02d}:{SEND_MINUTE:02d} — running daily job!")
+            print(f"🔔 Time to send!")
             daily_job()
             sent_today = True
 
-        # Log every minute so we know bot is alive
         if now.second < 10:
-            print(f"💓 Bot alive — {now.strftime('%H:%M')} (waiting for {SEND_HOUR:02d}:{SEND_MINUTE:02d})")
+            print(f"💓 {now.strftime('%H:%M')} UTC | Maldives: {(now + timedelta(hours=5)).strftime('%H:%M')}")
 
         time.sleep(10)
